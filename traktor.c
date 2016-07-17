@@ -2,6 +2,7 @@
 #include "osapi.h"
 #include "gpio.h"
 #include "os_type.h"
+#include "user_interface.h"
 
 static const int pin = 1;
 static volatile os_timer_t some_timer;
@@ -28,23 +29,41 @@ void ICACHE_FLASH_ATTR user_set_station_config(void)
 	struct station_config stationConf;
 
 	stationConf.bssid_set = 0;
-	os_memcpy(&stationConf.ssid ssid, 32);
-	os_memcpy(&stationConf.password, password 64);
+	os_memcpy(&stationConf.ssid, ssid, 32);
+	os_memcpy(&stationConf.password, password, 64);
 
 	wifi_station_set_config(&stationConf);
 }
 
+void wifi_event_handler(System_Event_t *event)
+{
+	switch(event->event)
+	{
+		case EVENT_STAMODE_CONNECTED:
+			os_printf("Connected to %s\n",
+					event->event_info.connected.ssid);
+			break;
+		case EVENT_STAMODE_GOT_IP:
+			os_printf("Got IP: " IPSTR, IP2STR(&event->event_info.got_ip.ip));
+			os_printf("\n");
+			break;
+		default: break;
+	}
+}
 
 void ICACHE_FLASH_ATTR user_init()
 {
   // init gpio sussytem
   gpio_init();
 
-  // configure UART TXD to be GPIO1, set as output
-  PIN_FUNC_SELECT(PERIPHS_IO_MUX_U0TXD_U, FUNC_GPIO1); 
-  gpio_output_set(0, 0, (1 << pin), 0);
+  // set UART baud rate
+  // uart_init(115200, 115200); Can't find the correct header.
+  // thank you http://kacangbawang.com/esp8266-sdk-os_printf-prints-garbage/
+  uart_div_modify(0, UART_CLK_FREQ / 115200);
 
   // set up wifi access
+  wifi_set_event_handler_cb(wifi_event_handler);
   wifi_set_opmode(STATION_MODE);
   user_set_station_config();
+  //gpio_output_set(0, (1 << pin), 0, 0);
 }
