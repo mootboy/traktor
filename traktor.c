@@ -1,25 +1,30 @@
+#include "stdio.h"
+#include "stdlib.h"
 #include "ets_sys.h"
 #include "osapi.h"
 #include "gpio.h"
 #include "os_type.h"
 #include "user_interface.h"
+#include "espconn.h"
 
-static const int pin = 1;
-static volatile os_timer_t some_timer;
+struct espconn udp_conn;
+esp_udp udp;
 
-void some_timerfunc(void *arg)
+LOCAL void servo_set_deg(short degrees)
 {
-  //Do blinky stuff
-  if (GPIO_REG_READ(GPIO_OUT_ADDRESS) & (1 << pin))
-  {
-    // set gpio low
-    gpio_output_set(0, (1 << pin), 0, 0);
-  }
-  else
-  {
-    // set gpio high
-    gpio_output_set((1 << pin), 0, 0, 0);
-  }
+	os_printf("degrees: %d\n", degrees);
+}
+
+LOCAL void ICACHE_FLASH_ATTR
+servo_conn_recv_cb(void *arg, char *data, unsigned short len)
+{
+	if (len < 4)
+	{
+		char *end;
+		servo_set_deg((short)strtol(data, &end, 10));
+	} else {
+		os_printf("too long data: %s", data);
+	}
 }
 
 void ICACHE_FLASH_ATTR user_set_station_config(void)
@@ -35,7 +40,19 @@ void ICACHE_FLASH_ATTR user_set_station_config(void)
 	wifi_station_set_config(&stationConf);
 }
 
-void wifi_event_handler(System_Event_t *event)
+LOCAL void ICACHE_FLASH_ATTR
+setup_udp()
+{
+	sint8 err;
+	udp_conn.type = ESPCONN_UDP;
+	udp_conn.state = ESPCONN_NONE;
+	udp.local_port = 53850;
+	udp_conn.proto.udp = &udp;
+	err = espconn_create(&udp_conn);
+}
+
+LOCAL void ICACHE_FLASH_ATTR
+wifi_event_handler(System_Event_t *event)
 {
 	switch(event->event)
 	{
@@ -44,12 +61,16 @@ void wifi_event_handler(System_Event_t *event)
 					event->event_info.connected.ssid);
 			break;
 		case EVENT_STAMODE_GOT_IP:
-			os_printf("Got IP: " IPSTR, IP2STR(&event->event_info.got_ip.ip));
-			os_printf("\n");
+			os_printf("setting up udp\n");
+			setup_udp();
+			os_printf("udp set up, registering callback\n");
+			espconn_regist_recvcb(&udp_conn, servo_conn_recv_cb);
+			os_printf("registered callback\n");
 			break;
 		default: break;
 	}
 }
+
 
 void ICACHE_FLASH_ATTR user_init()
 {
