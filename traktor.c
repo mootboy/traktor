@@ -35,8 +35,12 @@ void hw_servo_cb(void)
 
 // Servo control stuff.
 void servo_set_pulse(uint32 microseconds) {
-	pulse = microseconds / HW_TIMER_US;
-	os_printf("us: %d, pulse: %d\n", microseconds, pulse);
+	if (microseconds >= SERVO_MIN_DUTY_US && microseconds <= SERVO_MAX_DUTY_US) {
+		pulse = microseconds / HW_TIMER_US;
+		os_printf("us: %d, pulse: %d\n", microseconds, pulse);
+	} else {
+		os_printf("overflow/underflow: %d us\n", microseconds);
+	}
 }
 
 LOCAL void
